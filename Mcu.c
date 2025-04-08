@@ -24,14 +24,15 @@ static uint32_t last_byte_tick = 0;
 
 void mcu_uart_init(void)
 {
-    HAL_UART_Receive_IT(&huart1, &rx_byte, 1); // Start interrupt-based RX
+    HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance != USART1) return;
 
-    last_byte_tick = HAL_GetTick(); // for timeout tracking
+    printf("[RX] 0x%02X (state: %d)\n", rx_byte, state);  // << Your RX debug line
+    last_byte_tick = HAL_GetTick();  // for timeout tracking
 
     switch (state)
     {
@@ -73,11 +74,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
         case READ_CHECKSUM:
             if (rx_byte == rx_checksum) {
-                uint8_t opcode = rx_buffer[0];
-                uint8_t addr   = rx_buffer[1];
-                uint8_t len    = rx_buffer[2];
-                uint8_t* data  = &rx_buffer[3];
-
+                uint8_t addr = rx_buffer[1];
+                uint8_t len  = rx_buffer[2];
+                uint8_t* data = &rx_buffer[3];
                 send_packet(OPCODE_ACK, addr, data, len);
             } else {
                 send_packet(OPCODE_NACK, 0x00, NULL, 0);
@@ -118,7 +117,6 @@ void send_packet(uint8_t opcode, uint8_t addr, uint8_t *data, uint8_t len)
 
     HAL_UART_Transmit(&huart1, tx, i, HAL_MAX_DELAY);
 
-    // Print response to TeraTerm
     if (opcode == OPCODE_ACK) {
         printf("[ACK] Sent to addr 0x%02X | Data:", addr);
         for (uint8_t j = 0; j < len; j++)
