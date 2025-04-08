@@ -1,26 +1,14 @@
-#include "main.h"
-#include "mcu_to_mcu.h"
-#include <stdio.h>
+uint8_t test_data[] = {0xDE, 0xAD, 0xBE};
 
-int main(void)
-{
-    HAL_Init();
-    SystemClock_Config();
-    MX_GPIO_Init();
-    mcu_uart_init();
+// Construct the full valid packet
+uint8_t packet[8];
+packet[0] = 0xAA;                   // Start byte
+packet[1] = OPCODE_WRITE;
+packet[2] = 0x20;                   // Addr
+packet[3] = 3;                      // Length
+packet[4] = test_data[0];
+packet[5] = test_data[1];
+packet[6] = test_data[2];
+packet[7] = OPCODE_WRITE ^ 0x20 ^ 3 ^ 0xDE ^ 0xAD ^ 0xBE; // Checksum
 
-    uint8_t test_data[] = {0xDE, 0xAD, 0xBE};
-    send_packet(OPCODE_WRITE, 0x20, test_data, 3);
-
-    while (1)
-    {
-        check_uart_timeout();
-        HAL_Delay(1000);
-    }
-}
-
-int __io_putchar(int ch)
-{
-    HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
-    return ch;
-}
+simulate_rx_packet(packet, sizeof(packet));  // Feed it in byte by byte
