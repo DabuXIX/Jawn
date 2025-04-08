@@ -12,3 +12,8 @@ packet[6] = test_data[2];
 packet[7] = OPCODE_WRITE ^ 0x20 ^ 3 ^ 0xDE ^ 0xAD ^ 0xBE; // Checksum
 
 simulate_rx_packet(packet, sizeof(packet));  // Feed it in byte by byte
+
+
+printf("[TX] Sent packet: opcode 0x%02X, addr 0x%02X, len %d\n",
+       OPCODE_WRITE, 0x20, 3);
+simulate_rx_packet(packet, sizeof(packet));
