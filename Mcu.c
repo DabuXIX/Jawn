@@ -128,3 +128,13 @@ void send_packet(uint8_t opcode, uint8_t addr, uint8_t *data, uint8_t len)
         printf("[TX] Sent packet: opcode 0x%02X, addr 0x%02X, len %d\n", opcode, addr, len);
     }
 }
+
+
+
+void simulate_rx_packet(uint8_t *packet, uint8_t len)
+{
+    for (uint8_t i = 0; i < len; i++) {
+        rx_byte = packet[i];
+        HAL_UART_RxCpltCallback(&huart1);  // Trigger your own parser manually
+    }
+}
