@@ -1,0 +1,43 @@
+IBM DOORS Training Overview – Summary 
+
+This training document outlines a foundational learning plan for IBM DOORS, focused on building practical skills in structured requirements management, traceability, and data interoperability. It is designed for engineers who are new to DOORS or formalizing their knowledge of the tool. 
+
+Document Purpose: 
+
+• Provide a clear, time-efficient path to mastering DOORS basics 
+
+• Highlight key training modules, objectives, and outcomes 
+
+• Serve as a reusable resource for onboarding and team upskilling 
+
+Included Training Modules: 
+
+• DOORS 101: Basics – Interface overview and workflow fundamentals 
+
+• Create Objects & Attributes – Structuring requirements with metadata 
+
+• Link Objects & Trace – Traceability setup and impact analysis 
+
+• Write Better Requirements – Best practices for clarity and testability 
+
+• Use ReqIF – Data export/import for collaboration with DOORS Next 
+
+Key Outcomes: 
+
+• Stronger requirement structure and consistency 
+
+• Better traceability and change impact awareness 
+
+• Improved audit readiness and compliance 
+
+• Cross-tool collaboration via ReqIF 
+
+Next Recommendations: 
+
+• Apply DOORS to current projects (e.g., [Insert System/Project Name]) 
+
+• Create reusable module templates 
+
+• Extend training to other team members 
+
+• Host a traceability demo or hands-on review
