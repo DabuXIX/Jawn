@@ -1,0 +1,516 @@
+
+
+import tkinter as tk
+
+from tkinter import filedialog, messagebox
+
+from PIL import Image, ImageDraw, ImageFont
+
+import numpy as np
+
+import os
+
+
+def reverse_bits(byte):
+
+    # """Reverse the bits in a single byte (8 bits)."""
+
+    # reversed_byte = 0
+
+    # for i in range(8):
+
+    #     if byte & (1 << i):
+
+    #         reversed_byte |= (1 << (7 - i))
+
+    return byte
+
+
+def generate_xbm_data(ttf_path, char_list, forced_height, max_width,
+
+                      canvas_width, canvas_height,
+
+                      padding_top=0, padding_bottom=0,
+
+                      grid_width_override=None, grid_height_override=None,
+
+                      threshold_value=128):
+
+    """
+
+    Generates XBM data for characters.
+
+    If canvas_width==32 and canvas_height==64 then by default it uses a grid of 17x39.
+
+    You can override this grid by providing grid_width_override and grid_height_override.
+
+    """
+
+    font_size = forced_height * 2
+
+    font = ImageFont.truetype(ttf_path, font_size)
+
+    all_xbm_data = {}
+
+    
+
+    # Define special cases for punctuation/narrow characters (if needed)
+
+    punctuation_set = {',', '.'}
+
+    punctuation_scale = 0.25
+
+    narrow_chars = {"I"}
+
+    narrow_char_scale = 0.5
+
+
+    # Determine grid dimensions.
+
+    if canvas_width == 32 and canvas_height == 64:
+
+        if grid_width_override is not None and grid_height_override is not None:
+
+            grid_width = grid_width_override
+
+            grid_height = grid_height_override
+
+        else:
+
+            grid_width = 17
+
+            grid_height = 39
+
+    else:
+
+        grid_width = canvas_width
+
+        grid_height = canvas_height
+
+
+    for char in char_list:
+
+        try:
+
+            if char == " ":
+
+                # Create an empty grid for a space character.
+
+                xbm_data = [[0x00 for _ in range(canvas_width // 8)]
+
+                            for _ in range(canvas_height)]
+
+                all_xbm_data[char] = xbm_data
+
+                continue
+
+
+            (width, height), (offset_x, offset_y) = font.font.getsize(char)
+
+            if width == 0 or height == 0:
+
+                continue
+
+
+            # Render the character into an image.
+
+            image = Image.new('L', (width, height), 0)
+
+            draw = ImageDraw.Draw(image)
+
+            draw.text((-offset_x, -offset_y), char, font=font, fill=255)
+
+
+            # Set target scaling based on character type.
+
+            if char in punctuation_set:
+
+                target_height = int(forced_height * punctuation_scale)
+
+                aspect_ratio = width / height
+
+                scaled_width = min(int(target_height * aspect_ratio), max_width)
+
+            elif char in narrow_chars:
+
+                target_height = forced_height
+
+                aspect_ratio = width / height
+
+                scaled_width = min(int(target_height * aspect_ratio * narrow_char_scale), max_width)
+
+            else:
+
+                target_height = forced_height
+
+                aspect_ratio = width / height
+
+                scaled_width = min(int(target_height * aspect_ratio), max_width)
+
+
+            img_resized = image.resize((scaled_width, target_height), Image.Resampling.LANCZOS)
+
+            binary_array = (np.array(img_resized) > threshold_value).astype(np.uint8)
+
+
+            # Create an empty padded array.
+
+            padded_array = np.zeros((canvas_height, canvas_width), dtype=np.uint8)
+
+
+            if canvas_width == 32 and canvas_height == 64:
+
+                # For the 32x64 canvas, align using grid dimensions.
+
+                if char in punctuation_set:
+
+                    # Align punctuation to the bottom of the grid.
+
+                    vertical_offset = grid_height - binary_array.shape[0]
+
+                else:
+
+                    vertical_offset = max((grid_height - binary_array.shape[0]) // 2, 0)
+
+                horizontal_offset = max((grid_width - binary_array.shape[1]) // 2, 0)
+
+                padded_array[vertical_offset:vertical_offset + binary_array.shape[0],
+
+                             horizontal_offset:horizontal_offset + binary_array.shape[1]] = binary_array
+
+            else:
+
+                # For non-32x64, use padding values directly.
+
+                vertical_start = padding_top
+
+                horizontal_padding = (canvas_width - scaled_width) // 2
+
+                padded_array[vertical_start:vertical_start + target_height,
+
+                             horizontal_padding:horizontal_padding + scaled_width] = binary_array
+
+
+            # Convert padded image rows into an array of bytes.
+
+            xbm_data = []
+
+            for row in padded_array:
+
+                row_bytes = []
+
+                for byte_index in range(0, canvas_width, 8):
+
+                    byte = 0
+
+                    for bit_index in range(8):
+
+                        col = byte_index + bit_index
+
+                        if col < canvas_width and row[col]:
+
+                            byte |= (1 << (7 - bit_index))
+
+                    row_bytes.append(reverse_bits(byte))
+
+                xbm_data.append(row_bytes)
+
+
+            all_xbm_data[char] = xbm_data
+
+
+        except Exception as e:
+
+            print(f"Warning: Unable to process character '{char}'. Reason: {e}")
+
+
+    return all_xbm_data
+
+
+def write_xbm(all_xbm_data, output_file, canvas_width, canvas_height):
+
+    """
+
+    Writes XBM data to a file.
+
+    Strikeout has been removed so only normal character data is output.
+
+    """
+
+    with open(output_file, "w", encoding="utf-8") as f:
+
+        f.write("# XBM File\n\n")
+
+        for char, xbm_data in all_xbm_data.items():
+
+            f.write(f"/* Character: '{char}' */\n")
+
+            f.write(f"#define {char}_width {canvas_width}\n")
+
+            f.write(f"#define {char}_height {canvas_height}\n")
+
+            f.write(f"static char {char}_bits[] = {{\n")
+
+            for row_bytes in xbm_data:
+
+                f.write("  " + ", ".join(f"0x{byte:02X}" for byte in row_bytes) + ",\n")
+
+            f.write("};\n\n")
+
+    print(f"XBM file saved as {output_file}")
+
+
+def write_mif(all_xbm_data, output_file, canvas_width, canvas_height):
+
+    """
+
+    Writes MIF data to a file (normal version only).
+
+    For 32x64 canvases it writes the MIF normally; later these files will be split into high and low halves.
+
+    """
+
+    output_lines = []
+
+    
+
+    # Write MIF header.
+
+    depth = 8192 if canvas_width == 16 and canvas_height == 32 else 16384
+
+    header = [
+
+        f"DEPTH = {depth};",
+
+        f"WIDTH = {canvas_width};",
+
+        "ADDRESS_RADIX = HEX;",
+
+        "DATA_RADIX = HEX;",
+
+        "CONTENT BEGIN"
+
+    ]
+
+    output_lines.extend(header)
+
+    
+
+    address = 0x0000
+
+    for char, xbm_data in all_xbm_data.items():
+
+        output_lines.append(f"-- Character: '{char}'")
+
+        for row_bytes in xbm_data:
+
+            word = "".join(f"{byte:02X}" for byte in row_bytes)
+
+            output_lines.append(f"{address:04X} : {word};")
+
+            address += 1
+
+    output_lines.append("END;")
+
+    
+
+    with open(output_file, "w", encoding="utf-8") as f:
+
+        f.write("\n".join(output_lines))
+
+    
+
+    print(f"MIF file saved as {output_file}")
+
+
+def write_combined_binary(mif_16x32_file, 
+
+                          mif_32x64_orig_low_file, mif_32x64_orig_high_file,
+
+                          mif_32x64_new_low_file, mif_32x64_new_high_file,
+
+                          output_file, target_size=73728):
+
+    """
+
+    Combines three sections into a single binary file.
+
+    The sections, in order, are:
+
+      1. 16x32 section (normal, no splitting)
+
+      2. Original 32x64 section (rendered to 17x39) split into high and low halves
+
+      3. New 32x64 section (rendered to 26x58) split into high and low halves
+
+    
+
+    The final file has a total size of 72 KB (73728 bytes) including a 2-byte checksum
+
+    at the very end. Base offsets are defined below.
+
+    """
+
+    def load_mif_data(file_path):
+
+        """Loads MIF data and returns a list of (address, data_str)."""
+
+        entries = []
+
+        with open(file_path, "r", encoding="utf-8") as f:
+
+            for line in f:
+
+                line = line.strip()
+
+                if ":" not in line or not line.endswith(";"):
+
+                    continue
+
+                parts = line.split(":")
+
+                address_str = parts[0].strip()
+
+                data_str = parts[1].split(";")[0].strip()
+
+                try:
+
+                    addr = int(address_str, 16)
+
+                except ValueError:
+
+                    continue
+
+                if len(data_str) == 4 and all(c in "0123456789ABCDEFabcdef" for c in data_str):
+
+                    entries.append((addr, data_str))
+
+        return entries
+
+
+    # Load MIF data for each section.
+
+    data_16x32 = load_mif_data(mif_16x32_file)
+
+    data_32x64_orig_low = load_mif_data(mif_32x64_orig_low_file)
+
+    data_32x64_orig_high = load_mif_data(mif_32x64_orig_high_file)
+
+    data_32x64_new_low = load_mif_data(mif_32x64_new_low_file)
+
+    data_32x64_new_high = load_mif_data(mif_32x64_new_high_file)
+
+
+    # Define base offsets.
+
+    # We assume:
+
+    #   16x32 section occupies 0x2000 bytes (8192 bytes).
+
+    #   Each 32x64 section is split into two 0x4000-byte blocks (16384 bytes each)
+
+    base_offsets = {
+
+        "16x32": 0x0000,
+
+        "32x64_orig_high": 0x2000,                 # starts immediately after 16x32 section
+
+        "32x64_orig_low": 0x6000,          # high part of original section
+
+        "32x64_new_high": 0xA000,        # new section high starts after original section
+
+        "32x64_new_low": 0xD000,         # new section low follows its high part
+
+    }
+
+    # The data region is target_size - 2 bytes (2 bytes reserved for checksum)
+
+    prefill_size = target_size
+
+    
+
+    # Pre-fill the output binary file.
+
+    with open(output_file, "wb") as bin_file:
+
+        bin_file.write(b"\x00" * prefill_size)
+
+    
+
+    # Now write each section’s data into its allocated region.
+
+    with open(output_file, "r+b") as bin_file:
+
+        # Section 1: 16x32 (normal)
+
+        for addr, data_str in data_16x32:
+
+            offset = base_offsets["16x32"] + (addr * 2)
+
+            if offset < prefill_size:
+
+                bin_file.seek(offset)
+
+                bin_file.write(bytes.fromhex(data_str))
+
+        
+
+        # Section 2: Original 32x64 section (split into high and low)
+
+        for addr, data_str in data_32x64_orig_high:
+
+            offset = base_offsets["32x64_orig_high"] + (addr * 2)
+
+            if offset < prefill_size:
+
+                bin_file.seek(offset)
+
+                bin_file.write(bytes.fromhex(data_str))
+
+        for addr, data_str in data_32x64_orig_low:
+
+            offset = base_offsets["32x64_orig_low"] + (addr * 2)
+
+            if offset < prefill_size:
+
+                bin_file.seek(offset)
+
+                bin_file.write(bytes.fromhex(data_str))
+
+        
+
+        # Section 3: New 32x64 section (26x58), split into high and low
+
+        for addr, data_str in data_32x64_new_high:
+
+            offset = base_offsets["32x64_new_high"] + (addr * 2)
+
+            if offset < prefill_size:
+
+                bin_file.seek(offset)
+
+                bin_file.write(bytes.fromhex(data_str))
+
+        for addr, data_str in data_32x64_new_low:
+
+            offset = base_offsets["32x64_new_low"] + (addr * 2)
+
+            if offset < prefill_size:
+
+                bin_file.seek(offset)
+
+                bin_file.write(bytes.fromhex(data_str))
+
+    
+
+    # Calculate and write the 2-byte checksum at the end.
+
+    def calculate_checksum(file_path, data_size):
+
+        with open(file_path, "rb+") as f:
+
+            data = bytearray(f.read())
+
+            checksum
+
+
